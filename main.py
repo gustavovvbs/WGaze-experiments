@@ -1,14 +1,9 @@
+from psychopy import core, visual 
 
-import tobii_research as tr
+win = visual.Window(fullscr=True)
 
-def execute():
-    eyetrackers = tr.find_all_eyetrackers()
+fixation = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/fixation.png')
 
-    for eyetracker in eyetrackers:
-        print("Address: " + eyetracker.address)
-        print("Model: " + eyetracker.model)
-        print("Name (It's OK if this is empty): " + eyetracker.device_name)
-        print("Serial number: " + eyetracker.serial_number)
-        return eyetrackers
-
-execute()
+fixation.draw()
+win.flip()
+core.wait(3)

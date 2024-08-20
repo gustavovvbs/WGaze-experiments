@@ -1,2 +1,3 @@
 setuptools
-tobii_research
+psychopy
+tobii-research
