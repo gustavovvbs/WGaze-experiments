@@ -35,7 +35,7 @@ class EyeTrackerManager:
         self.trigger = ''
         # Create an empty list we will append our data to
         self.gaze_data_buffer = []
-        self.winsize = (2048, 1152)
+        self.winsize = (4096, 2304)
         self._latest_gaze = None, None
 
         # Find all connected eye trackers
@@ -59,12 +59,12 @@ class EyeTrackerManager:
     def gaze_data_callback(self, gaze_data):
         # Extract the data we are interested in
         t  = gaze_data.system_time_stamp / 1000.0
-        lx = gaze_data.left_eye.gaze_point.position_on_display_area[0] * self.winsize[0]
-        ly = self.winsize[1] - gaze_data.left_eye.gaze_point.position_on_display_area[1] * self.winsize[1]
+        lx = (gaze_data.left_eye.gaze_point.position_on_display_area[0])
+        ly = -(gaze_data.left_eye.gaze_point.position_on_display_area[1])
         lp = gaze_data.left_eye.pupil.diameter
         lv = gaze_data.left_eye.gaze_point.validity
-        rx = gaze_data.right_eye.gaze_point.position_on_display_area[0] * self.winsize[0]
-        ry = self.winsize[1] - gaze_data.right_eye.gaze_point.position_on_display_area[1] * self.winsize[1]
+        rx = (gaze_data.right_eye.gaze_point.position_on_display_area[0])
+        ry = -(gaze_data.right_eye.gaze_point.position_on_display_area[1])
         rp = gaze_data.right_eye.pupil.diameter
         rv = gaze_data.right_eye.gaze_point.validity
             
@@ -88,10 +88,10 @@ class EyeTrackerManager:
 #%% Load and prepare stimuli
 
 with EyeTrackerManager() as et_manager:
-    win = visual.Window(size = et_manager.winsize, fullscr=True, units='pix', pos = (0, 30))
+    win = visual.Window(size = et_manager.winsize, fullscr=True, units='norm')
 
-    gaze = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/circle.png', size = (10, 10))
-    fixation = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/fixation.png', size = (200, 200))
+    gaze = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/circle.png', size = (0.1, 0.1))
+    fixation = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/fixation.png', size = (0.08, 0.08))
 
     #%% Record the data
 
@@ -102,12 +102,23 @@ with EyeTrackerManager() as et_manager:
 
     clock = core.Clock()
     et_manager.trigger = 'Fixation'
+    gazes_draw = []
     while clock.getTime() < 30:
         x, y = et_manager.latest_gaze
         print(x, y)
         if x is not None and y is not None:
-            gaze.setPos((x, y))
-            gaze.draw()
+            gazes_draw.append(visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/circle.png', size = (0.1, 0.1), pos = (x, y)))
+            
+            for i in gazes_draw:
+                i.draw()
+                print(i.pos)
+                # if len(gazes_draw)>200:
+                #     for _ in range(150):
+                #         del gazes_draw[0]
+                #maybe delete the last ones after some treshlhold lenght of the list 
+                #or attribute a timestamp for each of them and after some time has passed after the beginnign of clock it erase the last ones
+            # gaze.setPos((x, y))
+            # gaze.draw()
         
         fixation.draw()
         win.flip()
