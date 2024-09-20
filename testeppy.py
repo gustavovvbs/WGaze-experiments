@@ -1,6 +1,7 @@
 import os
 import glob
 import pandas as pd
+import math
 
 # Import some libraries from PsychoPy
 from psychopy import core, event, visual, prefs
@@ -27,11 +28,11 @@ def gaze_data_callback(gaze_data):
     # Extract the data we are interested in
     t  = gaze_data.system_time_stamp / 1000.0
     lx = gaze_data.left_eye.gaze_point.position_on_display_area[0] * winsize[0]
-    ly = winsize[1] - gaze_data.left_eye.gaze_point.position_on_display_area[1] * winsize[1]
+    ly = gaze_data.left_eye.gaze_point.position_on_display_area[1] * winsize[1]
     lp = gaze_data.left_eye.pupil.diameter
     lv = gaze_data.left_eye.gaze_point.validity
     rx = gaze_data.right_eye.gaze_point.position_on_display_area[0] * winsize[0]
-    ry = winsize[1] - gaze_data.right_eye.gaze_point.position_on_display_area[1] * winsize[1]
+    ry = gaze_data.right_eye.gaze_point.position_on_display_area[1] * winsize[1]
     rp = gaze_data.right_eye.pupil.diameter
     rv = gaze_data.right_eye.gaze_point.validity
         
@@ -59,107 +60,121 @@ def write_buffer_to_file(buffer, output_path):
     out.to_csv(output_path, mode='a', index =False, header = file_exists)
     
     
-    
-#%% Load and prepare stimuli
+if __name__ == '__main__':
+    #%% Load and prepare stimuli
 
-# Winsize
-winsize = (1920, 1080)
-
-
-win = visual.Window(size = winsize, fullscr=True, units='pix', pos = (0, 30))
-
-fixation = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/fixation.png', size = (200, 200))
-circle = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/circle.png', size = (200, 200))
-square = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/square.png', size = (200, 200))
-winning = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/winning.png', size = (200, 200), pos=(560, 0))
-loosing = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/loosing.png', size = (200, 200), pos=(-560, 0))
+    # Winsize
+    winsize = (1920, 1080)
 
 
-winning_sound = sound.Sound('/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/winning.wav')
-loosing_sound = sound.Sound('/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/loosing.wav')
+    win = visual.Window(size = winsize, fullscr=True, units='pix', pos = (0, 30))
 
-# List of stimuli
-cues = [circle, square] # put both cues in a list
-rewards = [winning, loosing] # put both rewards in a list
-sounds = [winning_sound,loosing_sound] # put both sounds in a list
-
-# Create list of trials in which 0 means winning and 1 means losing
-Trials = [0, 1 ]
+    gaze = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/circle.png', size = (10, 10))
+    fixation = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/fixation.png', size = (200, 200))
+    circle = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/circle.png', size = (200, 200))
+    square = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/square.png', size = (200, 200))
+    winning = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/winning.png', size = (200, 200), pos=(560, 0))
+    loosing = visual.ImageStim(win, image = '/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/loosing.png', size = (200, 200), pos=(-560, 0))
 
 
-#%% Record the data
+    winning_sound = sound.Sound('/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/winning.wav')
+    loosing_sound = sound.Sound('/Users/saladeux/Documents/WGaze-experiments/EXP/Stimuli/loosing.wav')
 
-# Find all connected eye trackers
-found_eyetrackers = tr.find_all_eyetrackers()
+    # List of stimuli
+    cues = [circle, square] # put both cues in a list
+    rewards = [winning, loosing] # put both rewards in a list
+    sounds = [winning_sound,loosing_sound] # put both sounds in a list
 
-# We will just use the first one
-Eyetracker = found_eyetrackers[0]
-
-#Start recording
-Eyetracker.subscribe_to(tr.EYETRACKER_GAZE_DATA, gaze_data_callback)
+    # Create list of trials in which 0 means winning and 1 means losing
+    Trials = [0, 1 ]
 
 
-# Create an empty list we will append our data to
-gaze_data_buffer = []
+    #%% Record the data
 
-for trial in Trials:
+    # Find all connected eye trackers
+    found_eyetrackers = tr.find_all_eyetrackers()
 
-    # ### Present the fixation
-    win.flip() # we flip to clean the window
+    # We will just use the first one
+    Eyetracker = found_eyetrackers[0]
+
+    # Create an empty list we will append our data to
+    gaze_data_buffer = []
+
+    #Start recording
+    Eyetracker.subscribe_to(tr.EYETRACKER_GAZE_DATA, gaze_data_callback)
+
+    for trial in Trials:
+
+        # ### Present the fixation
+        win.flip() # we flip to clean the window
+
+            
+        clock = None
+        while clock is None or clock.getTime() < 30:
+            if gaze_data_buffer:
+                gaze_data = gaze_data_buffer[-1]
+                x, y = gaze_data[1], gaze_data[5]
+                if not math.isnan(x) and not math.isnan(y):
+                    gaze.setPos((x, y))
+                gaze.draw()
+                print(gaze_data_buffer[-1])
+                if clock is None:
+                    clock = core.Clock()
+                    print('Started eye tracking')
+            else:
+                print('Empty')
+            fixation.draw()
+            win.flip()
+            trigger = 'Fixation'
+        # core.wait(1)  # wait for 1 second
+
+
+        ### Present the cue
+        cues[trial].draw()
+        win.flip()
+        if trial ==0:
+            trigger = 'Circle'
+        else:
+            trigger = 'Square'
+        core.wait(1)  # wait for 3 seconds
+
+        ### Wait for saccadic latencty
+        win.flip()
+        core.wait(0.75)
+
+        ### Present the reward
+        rewards[trial].draw()
+        win.flip()
+
+        if trial ==0:
+            trigger = 'Reward'
+        else:
+            trigger = 'NoReward'
+        sounds[trial].play()
+        core.wait(1)  # wait for 2 second
+
+        ### ISI
+        win.flip()    # we re-flip at the end to clean the window
+        print(gaze_data_buffer)
+        fixation.pos = (gaze_data_buffer[-1][1], -gaze_data_buffer[-1][5] + 500)
+        fixation.draw()
+        win.flip()
+        core.wait(1.5)
+        clock = core.Clock()
+        while clock.getTime() < 1:
+            pass
+        
+        ### Check for closing experiment
+        keys = event.getKeys() # collect list of pressed keys
+        if 'escape' in keys:
+            win.close()  # close window
+            Eyetracker.unsubscribe_from(tr.EYETRACKER_GAZE_DATA, gaze_data_callback) # unsubscribe eyetracking
+            core.quit()  # stop study
 
         
-    fixation.draw()
-    win.flip()
-    trigger = 'Fixation'
-    core.wait(1)  # wait for 1 second
-
-
-    ### Present the cue
-    cues[trial].draw()
-    win.flip()
-    if trial ==0:
-        trigger = 'Circle'
-    else:
-        trigger = 'Square'
-    core.wait(1)  # wait for 3 seconds
-
-    ### Wait for saccadic latencty
-    win.flip()
-    core.wait(0.75)
-
-    ### Present the reward
-    rewards[trial].draw()
-    win.flip()
-
-    if trial ==0:
-        trigger = 'Reward'
-    else:
-        trigger = 'NoReward'
-    sounds[trial].play()
-    core.wait(1)  # wait for 2 second
-
-    ### ISI
-    win.flip()    # we re-flip at the end to clean the window
-    print(gaze_data_buffer)
-    fixation.pos = (gaze_data_buffer[-1][1], -gaze_data_buffer[-1][5] + 500)
-    fixation.draw()
-    win.flip()
-    core.wait(1.5)
-    clock = core.Clock()
-    while clock.getTime() < 1:
-        pass
-    
-    ### Check for closing experiment
-    keys = event.getKeys() # collect list of pressed keys
-    if 'escape' in keys:
-        win.close()  # close window
-        Eyetracker.unsubscribe_from(tr.EYETRACKER_GAZE_DATA, gaze_data_callback) # unsubscribe eyetracking
-        core.quit()  # stop study
-
-      
-win.close() # close window
-Eyetracker.unsubscribe_from(tr.EYETRACKER_GAZE_DATA, gaze_data_callback) # unsubscribe eyetracking
-core.quit() # stop study
+    win.close() # close window
+    Eyetracker.unsubscribe_from(tr.EYETRACKER_GAZE_DATA, gaze_data_callback) # unsubscribe eyetracking
+    core.quit() # stop study
 
 
 
