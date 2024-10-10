@@ -3,29 +3,62 @@ import os
 from live_gaze import EyeTrackerManager
 from testeppy import write_buffer_to_file
 import tobii_research as tr
+import websockets
+import asyncio 
+import logging
+import time
+import requests
+
 
 ''' 
     CALIBRACAO NO EXP -> CHECAR PQ N TA PRESTANDO 
     INTEGRACAO -> PRIMEIROS PASSOS PRA INTEGRAR C A API; CHECAR WEBSOCKER
     CAPTURA DOS DADOS -> DESENVOLVER LOGICA PRA SO PEGAR DPS Q ELE PASSA O OLHO PRA DENTRO DO TECLADO PELA PRIMEIRA VEZ
 '''
-WIN_WIDTH = 2048
-WIN_HEIGHT = 1152
+
+# async def con_ws():
+#     uri = "ws://localhost:8080/monitor"
+#     timeout = 120
+#     start_time = time.time()
+#     while True:
+#         try:
+#             async with websockets.connect(uri) as websocket:
+#                 await websocket.send('{"type": "connect"}')
+
+#                 response = await websocket.recv()
+#                 logging.info(f"Recebido: {response}")
+
+#                 return websocket
+
+#         except websocket.ConnectionClosed:
+#             logging.warning("Conexao fechada, tentando reconectar...")
+        
+#         if start_time - time.time() >= timeout:
+#             break
+
+#         await asyncio.sleep(3)
+
+#     logging.error("Timeout exceeded, could not establish connection.")
+#     return None 
+
+win_width = 2048
+win_height = 1152
 DWELL_TIME = 1.5
 DWELL_TOLERANCE = 0.1
 
-win = visual.Window(size=(WIN_WIDTH, WIN_HEIGHT), units='pix', fullscr=True)
-
-win_width = win.size[0]
-win_height = win.size[1]
+win = visual.Window(size=(win_width, win_height), units='pix', fullscr=True)
+# win_width = win.size[0]
+# win_height = win.size[1]
 
 key_width = 160 * 0.75  
 key_height = 160 * 0.75
 
 horizontal_spacing = key_width * 0.25 
-vertical_spacing = 200 
+vertical_spacing = 200
 
-top_row_y = win_height / 2 - vertical_spacing * 4.6
+calibration_count = 0
+
+top_row_y = win_height / 2 - vertical_spacing*1.5
 middle_row_y = top_row_y - vertical_spacing 
 bottom_row_y = middle_row_y - vertical_spacing 
 
@@ -76,7 +109,7 @@ win.winHandle.minimize()
 win.flip()
 participant_info = get_participant_info()
 
-experiment_filename = f"data_{participant_info['name']}.csv"  
+experiment_filename = f"data/data_{participant_info['name']}.csv"  
 this_exp = data.ExperimentHandler(
     name='WordExperiment',
     version='1.0',
@@ -89,19 +122,21 @@ win.winHandle.activate()
 win.winHandle.set_fullscreen(True)
 win.flip()
 
-words = ['primeiro', 'teste', 'tela', 'teste']
+words = ['primeiro', 'teste', 'clock', 'chair', 'block', 'reputation']
 
 conditions = [{'word': word} for word in words]
 
 # Criar estímulos das teclas
 key_rectangles = []
 key_labels = []
-for label, pos in keys:
+for label, pos in keys[:-1]:
     rect = visual.Rect(win, width=key_width, height=key_height, pos=pos, lineColor='black', fillColor='lightgray')
     text = visual.TextStim(win, text=label, pos=pos, color='black', height=50)  # Ajuste o tamanho da fonte se necessário
     key_rectangles.append(rect)
     key_labels.append(text)
-    # rect_yellow = visual.Rect(win, width=key_width, height=key_height, pos=(0, 0), lineColor='yellow', fillColor='lightgray')
+
+rect_end = visual.Rect(win, width = key_width + 100, height = key_height + 50, pos = (0, bottom_row_y - vertical_spacing))
+text_end = visual.TextStim(win, text = 'BOTAO ACABAR', height = 50, pos = (0, bottom_row_y - vertical_spacing))
 
 trials = data.TrialHandler(
     trialList=conditions,  
@@ -124,22 +159,31 @@ def calibrate_eyetracker(eyetracker):
     # Define calibration points relative to the center of the screen
     points_to_calibrate = [(0.5, 0.5), (0.1, 0.1), (0.1, 0.9), (0.9, 0.1), (0.9, 0.9)]
 
-    dots = [visual.Circle(win, radius=40, pos=(0, 0), fillColor='black'), 
-    visual.Circle(win, radius=40, pos=(-WIN_WIDTH/2 + 100, WIN_HEIGHT/2 - 100), fillColor='black'),
-    visual.Circle(win, radius=40, pos=(-WIN_WIDTH/2 +100, -WIN_HEIGHT/2 +100), fillColor='black'),
-    visual.Circle(win, radius=40, pos=(WIN_WIDTH/2 - 100, -WIN_HEIGHT/2 + 100), fillColor='black'),
-    visual.Circle(win, radius=40, pos=(WIN_WIDTH/2 - 100, WIN_HEIGHT/2 - 100), fillColor='black')]
+    # dots = [visual.Circle(win, radius=25, pos=(0, 0), fillColor='black'), 
+    # visual.Circle(win, radius=25, pos=(-win_width/2 + win_width*0.1, win_height/2 - win_height*0.1), fillColor='black'),
+    # visual.Circle(win, radius=25, pos=(-win_width/2 + win_width*0.1 ,-win_height/2 + win_height*0.1), fillColor='black'),
+    # visual.Circle(win, radius=25, pos=(win_width/2 - win_width*0.1, -win_height/2 + win_height*0.1), fillColor='black'),
+    # visual.Circle(win, radius=25, pos=(win_width/2 - win_width*0.1, win_height/2 - win_height*0.1), fillColor='black')]
+    dots = [
+        visual.Circle(win, radius=25, pos=((norm_pos[0] - 0.5) * win_width, (0.5 - norm_pos[1]) * win_height), fillColor='black') 
+        for norm_pos in points_to_calibrate
+    ]
+    dots_inside_dots = [
+        visual.Circle(win, radius = 10, pos = ((norm_pos[0] - 0.5) * win_width, (0.5 - norm_pos[1]) * win_height), fillColor='white') 
+        for norm_pos in points_to_calibrate
+    ]
 
-    for i, point in enumerate(points_to_calibrate):
+    for point, dot, dot_in_dot in zip(points_to_calibrate, dots, dots_inside_dots):
         # Show the point on the screen.
-        instruction = visual.TextStim(win, text="Look at the point until it disappears.", pos=(0, 0.8), color='black', height=30)
-        instruction.draw()
-        dots[i].draw()
+        dot.draw()
+        dot_in_dot.draw()
         win.flip()
         core.wait(2)  
 
-        if calibration.collect_data(point[0], point[1]) != tr.CALIBRATION_STATUS_SUCCESS:
-            calibration.collect_data(point[0], point[1])
+        attempts = 4
+        while calibration.collect_data(point[0], point[1]) != tr.CALIBRATION_STATUS_SUCCESS and attempts:
+            core.wait(1)
+            attempts -= 1
 
         win.flip()
         core.wait(0.5)
@@ -151,28 +195,32 @@ def calibrate_eyetracker(eyetracker):
     print("Exited calibration mode.")
 
 def run_trial(trial):
+    global calibration_count
     with EyeTrackerManager() as et:
-        calibration_text = visual.TextStim(win, text="A calibração vai começar.\nPor favor, olhe para os pontos que aparecerão na tela até que desapareçam.", pos=(0, 0), color='black', height=30)
-        calibration_text.draw()
-        win.flip()
-        core.wait(3)
+        print(calibration_count)
+        # websocket = con_ws()
+       
+        if calibration_count == 0 or calibration_count % 5 == 0:
+            calibration_text = visual.TextStim(win, text="A calibração vai começar.\nPor favor, olhe para os pontos que aparecerão na tela até que desapareçam.", pos=(0, 0), color='black', height=30)
+            calibration_text.draw()
+            win.flip()
+            core.wait(3)
+            calibrate_eyetracker(et.tracker)
 
-        calibrate_eyetracker(et.tracker)
+        calibration_count = calibration_count + 1 
 
-        word_stim = visual.TextStim(win, text=trial['word'], pos=(0, 450), color='black', height=50)
+        word_stim = visual.TextStim(win, text=trial['word'], pos=(0, bottom_row_y - vertical_spacing), color='black', height=50)
         word_stim.draw()
         win.flip()
         core.wait(1)  
 
-        response = None
-        clock_tracker = core.Clock()
         gazes_draw = []
         data_buffer = []
 
         fixation_time = core.Clock()
         tolerance_time = core.Clock()
 
-        draw_gaze = False  
+        draw_gaze = True
 
         while True:
             x, y = et.latest_gaze
@@ -180,18 +228,19 @@ def run_trial(trial):
 
             if 'g' in keys_pressed:
                 draw_gaze = not draw_gaze  
+            
+            if 'c' in keys_pressed:
+                calibrate_eyetracker(et.tracker)
 
+            target_area = keys[-1][1]  # Posição do 'BOTAO_ACABAR'
             if x is not None and y is not None:
                 data_buffer.append([x, y])
-                print(x, y)
                 if draw_gaze:
                     actual_gaze = visual.ImageStim(win, image='EXP/Stimuli/circle.png', size=(80, 80), pos=(x, y))
                     gazes_draw.append(actual_gaze)
                     actual_gaze.draw()
 
-                # Verificar se o gaze está dentro da área alvo
-                target_area = keys[-1][1]  # Posição do 'BOTAO_ACABAR'
-                if target_area[0] - 60 <= x <= target_area[0] + 60 and target_area[1] - 60 <= y <= target_area[1] + 60:
+                if target_area[0] - 160 <= x <= target_area[0] + 160 and target_area[1] - 110 <= y <= target_area[1] + 110:
                     tolerance_time.reset()
                 elif tolerance_time.getTime() > DWELL_TOLERANCE:
                     fixation_time.reset()
@@ -200,22 +249,25 @@ def run_trial(trial):
                     print('Olhou por um segundo')
                     break 
 
-            # Desenhar teclas
-            for rect, textin in zip(key_rectangles, key_labels):
-                rect.draw()
-                textin.draw()
+                # Desenhar teclas
+                for rect, textin in zip(key_rectangles, key_labels):
+                    rect.draw()
+                    textin.draw()
+                rect_end.draw()
+                text_end.draw()
 
-            # Desenhar retângulo de progresso do dwell time
-            dwell_progress = fixation_time.getTime() / DWELL_TIME
-            if dwell_progress > 1.0:
-                dwell_progress = 1.0
-            dwell_rect_width = key_width * dwell_progress
-            dwell_rect = visual.Rect(win, width=dwell_rect_width, height=key_height, pos=(target_area[0] - (key_width - dwell_rect_width) / 2, target_area[1]), lineColor='black', fillColor='blue')
-            dwell_rect.draw()
+                # Desenhar retângulo de progresso do dwell time
+                dwell_progress = fixation_time.getTime() / DWELL_TIME
+                if dwell_progress > 1.0:
+                    dwell_progress = 1.0
+                dwell_rect_width = key_width * dwell_progress
+                dwell_rect = visual.Rect(win, width=dwell_rect_width, height=key_height + 50, pos=(target_area[0] - (key_width - dwell_rect_width) / 2, target_area[1]), lineColor='black', fillColor='blue')
+                dwell_rect.draw()
 
             win.flip()
 
         if data_buffer:
+            requests.post('https://sldhzrbw-8080.brs.devtunnels.ms/trial', json={"data": data_buffer, "name": "gustavo_teste1", "age":18, "word": trial["word"]})
             trials.addData('response', data_buffer)
 
 # Executa todos os trials
