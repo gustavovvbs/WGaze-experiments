@@ -22,19 +22,16 @@ class EyeTrackerManager:
         self.gaze_data_buffer = []
         self.winsize = (2048, 1152)
         self._latest_gaze = (None, None)
-        self.lock = threading.Lock()  # Initialize the lock
+        self.lock = threading.Lock()  
 
-        # Find all connected eye trackers
         found_eyetrackers = tr.find_all_eyetrackers()
         self.tracker = found_eyetrackers[0]
 
     def __enter__(self):
-        # Start recording
         self.tracker.subscribe_to(tr.EYETRACKER_GAZE_DATA, self.gaze_data_callback, as_dictionary=True)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        # Unsubscribe from gaze data
         self.tracker.unsubscribe_from(tr.EYETRACKER_GAZE_DATA, self.gaze_data_callback)
 
     def wait_for_data(self):
@@ -42,7 +39,6 @@ class EyeTrackerManager:
             pass
 
     def gaze_data_callback(self, gaze_data):
-        # Extract the data we are interested in
         t = gaze_data['system_time_stamp'] / 1000.0
         lx = (gaze_data['left_gaze_point_on_display_area'][0]) * self.winsize[0] - (self.winsize[0] / 2)
         ly = self.winsize[1] / 2 - (gaze_data['left_gaze_point_on_display_area'][1]) * self.winsize[1]

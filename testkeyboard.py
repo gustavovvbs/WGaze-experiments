@@ -122,7 +122,6 @@ this_exp = data.ExperimentHandler(
     name='WordExperiment',
     version='1.0',
     extraInfo=participant_info,  
-    dataFileName=experiment_filename  
 )
 
 win.winHandle.maximize()
@@ -135,17 +134,16 @@ with open('experiment_assets/10kwords.txt', 'r') as f:
  
 conditions = [{'word': word} for word in words]
 
-# Criar estímulos das teclas
 key_rectangles = []
 key_labels = []
 for label, pos in keys[:-1]:
     rect = visual.Rect(win, width=key_width, height=key_height, pos=pos, lineColor='black', fillColor='lightgray')
-    text = visual.TextStim(win, text=label, pos=pos, color='black', height=50)  # Ajuste o tamanho da fonte se necessário
+    text = visual.TextStim(win, text=label, pos=pos, color='black', height=50)  
     key_rectangles.append(rect)
     key_labels.append(text)
 
 rect_end = visual.Rect(win, width = key_width + 100, height = key_height + 50, pos = (0, bottom_row_y - vertical_spacing))
-text_end = visual.TextStim(win, text = 'BOTAO ACABAR', height = 50, pos = (0, bottom_row_y - vertical_spacing))
+text_end = visual.TextStim(win, text = 'ESPAÇO [OK]', height = 50, pos = (0, bottom_row_y - vertical_spacing))
 
 trials = data.TrialHandler(
     trialList=conditions,  
@@ -161,19 +159,12 @@ def calibrate_eyetracker(eyetracker):
 
     calibration = tr.ScreenBasedCalibration(eyetracker)
 
-    # Enter calibration mode.
     calibration.enter_calibration_mode()
     print(f"Entered calibration mode for eye tracker with serial number {eyetracker.serial_number}.")
 
-    # Define calibration points relative to the center of the screen
     points_to_calibrate = [(0.5, 0.5), (0.1, 0.5), (0.5, 0.1), (0.5, 0.9), (0.9, 0.5), (0.1, 0.1), (0.1, 0.9), (0.9, 0.1), (0.9, 0.9)]
     random.shuffle(points_to_calibrate)
 
-    # dots = [visual.Circle(win, radius=25, pos=(0, 0), fillColor='black'), 
-    # visual.Circle(win, radius=25, pos=(-win_width/2 + win_width*0.1, win_height/2 - win_height*0.1), fillColor='black'),
-    # visual.Circle(win, radius=25, pos=(-win_width/2 + win_width*0.1 ,-win_height/2 + win_height*0.1), fillColor='black'),
-    # visual.Circle(win, radius=25, pos=(win_width/2 - win_width*0.1, -win_height/2 + win_height*0.1), fillColor='black'),
-    # visual.Circle(win, radius=25, pos=(win_width/2 - win_width*0.1, win_height/2 - win_height*0.1), fillColor='black')]
     dots = [
         visual.Circle(win, radius=25, pos=((norm_pos[0] - 0.5) * win_width, (0.5 - norm_pos[1]) * win_height), fillColor='black') 
         for norm_pos in points_to_calibrate
@@ -184,7 +175,6 @@ def calibrate_eyetracker(eyetracker):
     ]
 
     for point, dot, dot_in_dot in zip(points_to_calibrate, dots, dots_inside_dots):
-        # Show the point on the screen.
         dot.draw()
         dot_in_dot.draw()
         win.flip()
@@ -207,9 +197,8 @@ def calibrate_eyetracker(eyetracker):
 def run_trial(trial, et):
     global calibration_count
     print(calibration_count)
-    # websocket = con_ws()
     
-    if calibration_count == 0 or calibration_count % 5 == 0:
+    if calibration_count == 0:
         calibration_text = visual.TextStim(win, text="A calibração vai começar.\nPor favor, olhe para os pontos que aparecerão na tela até que desapareçam.", pos=(0, 0), color='black', height=30)
         calibration_text.draw()
         win.flip()
@@ -217,6 +206,22 @@ def run_trial(trial, et):
         calibrate_eyetracker(et.tracker)
 
     calibration_count = calibration_count + 1 
+    
+    
+    if calibration_count % 5 == 0:
+        rest_text = visual.TextStim(win, text="Descanse seus olhos um pouco, pode parar de olhar pra tela por enquanto :) ")
+        rest_text.draw()
+        pause_time = core.Clock()
+        while pause_time.getTime() < 5:
+            pause_progress = pause_time.getTime() / 5
+            pause_rect_width = key_width * pause_progress
+            total_pause_rect = visual.Rect(win, width = key_width, height = key_height + 50, pos = (0, bottom_row_y), lineColor = 'black')
+            pause_rect = visual.Rect(win, width=pause_rect_width, height=key_height + 50, pos=(0, bottom_row_y), lineColor='black', fillColor='blue')
+            total_pause_rect.draw()
+            pause_rect.draw()
+            rest_text.draw()
+            win.flip()
+        
 
     word_stim = visual.TextStim(win, text=trial['word'], pos=(0, bottom_row_y - vertical_spacing), color='black', height=50)
     word_stim.draw()
@@ -277,14 +282,15 @@ def run_trial(trial, et):
 
     if data_buffer:
         # handle_trial_end(data_buffer, trial)
-        requests.post('https://sldhzrbw-8000.brs.devtunnels.ms/trial', json={"data": data_buffer, "name": "gustavo_teste1", "age":18, "word": trial["word"]})
+        requests.post('https://wgaze-experiment-api.onrender.com/trial', json={"data": data_buffer, "name": "gustavo_teste1", "age":18, "word": trial["word"]})
+        et.gaze_data_buffer.clear()
         # trials.addData('response', data_buffer)
 
 # Executa todos os trials
 with EyeTrackerManager() as et:
     for trial in trials:
         run_trial(trial, et)
-        this_exp.nextEntry()
+        # this_exp.nextEntry()
 
 # Mensagem final
 end_stim = visual.TextStim(win, text="Experimento finalizado! Obrigado!", pos=(0, 0), color='black', height=50)
