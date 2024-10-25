@@ -4,7 +4,7 @@ from re import L
 import pandas as pd
 import math
 from collections import namedtuple
-
+import time
 # Import some libraries from PsychoPy
 from psychopy import core, event, visual, prefs
 prefs.hardware['audioLib'] = ['PTB']
@@ -71,6 +71,7 @@ class EyeTrackerManager:
         # Add gaze data to the buffer 
         self.gaze_data_buffer.append(GazeData(t, EyeData(lx,ly,lp,lv), EyeData(rx,ry,rp,rv), self.trigger))
 
+   
     @property
     def latest_gaze(self):
         if self.gaze_data_buffer:
